@@ -1,6 +1,6 @@
-import { pgTable, serial, varchar, text, integer, boolean } from "drizzle-orm/pg-core";
+import { pgTable, serial, varchar, text, integer, boolean, timestamp } from "drizzle-orm/pg-core";
 import { timestamps, soft_delete } from "../columns";
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import { user } from "./auth";
 
 export const courses = pgTable("courses", {
@@ -50,7 +50,7 @@ export const courseProgress = pgTable("course_progress", {
 		.references(() => user.id)
 		.notNull(),
 	lessonsCompleted: integer("lessons_completed").default(0).notNull(),
-	completedAt: timestamps.createdAt.notNull().default(null),
+	completedAt: timestamp("completed_at"),
 
 	...timestamps,
 });

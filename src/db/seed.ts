@@ -1,27 +1,33 @@
 import "dotenv/config";
-import { drizzle } from "drizzle-orm/node-postgres";
-import { Pool } from "pg";
-import * as schema from "./schema";
+import { db, withOrganization } from "@/db";
 import { organizations, user, session, account, verification, site_config, courses, lessons, courseEnrollment, courseProgress } from "./schema";
 import { auth } from "@/lib/auth";
-import { eq } from "drizzle-orm";
-
-const pool = new Pool({ connectionString: process.env.DATABASE_URL! });
-const db = drizzle({ client: pool, schema });
+import { eq, sql } from "drizzle-orm";
 
 async function seed() {
 	console.log("🔥 Purging database...");
 	
-	await db.delete(courseProgress);
-	await db.delete(courseEnrollment);
-	await db.delete(lessons);
-	await db.delete(courses);
-	await db.delete(session);
-	await db.delete(account);
-	await db.delete(user);
-	await db.delete(organizations);
-	await db.delete(site_config);
-	await db.delete(verification);
+	const purgeOrder = [
+		{ name: "Progress", obj: courseProgress },
+		{ name: "Enrollments", obj: courseEnrollment },
+		{ name: "Lessons", obj: lessons },
+		{ name: "Courses", obj: courses },
+		{ name: "Sessions", obj: session },
+		{ name: "Accounts", obj: account },
+		{ name: "Verifications", obj: verification },
+		{ name: "Users", obj: user },
+		{ name: "Organizations", obj: organizations },
+		{ name: "Site Config", obj: site_config },
+	];
+
+	for (const table of purgeOrder) {
+		console.log(` - Purging ${table.name}`);
+		try {
+			await db.delete(table.obj);
+		} catch (e) {
+			console.log(` ⚠️ Skip ${table.name} (dependency or missing)`);
+		}
+	}
 
 	console.log("🌱 Starting production-grade seed...\n");
 
@@ -54,16 +60,21 @@ async function seed() {
 		.where(eq(user.email, "admin@nextassist.com"));
 
 	// 3. Subsidiary Organizations
-	const orgs = [
+	const orgConfigs = [
 		{ name: "Acme Corp", slug: "acme-inc", plan: "Enterprise", type: "Company" },
 		{ name: "Globex Corporation", slug: "globex", plan: "Pro", type: "Company" },
 		{ name: "Initech", slug: "initech", plan: "Free", type: "Company" },
 		{ name: "Sprung Valley University", slug: "svu", plan: "University", type: "University" },
 	];
 
-	for (const org of orgs) {
+	for (const org of orgConfigs) {
 		console.log(`📦 Provisioning Org: ${org.name} (${org.slug})`);
 		await db.insert(organizations).values(org);
+		// Provision the physical schema
+		await db.execute(sql`CREATE SCHEMA IF NOT EXISTS ${sql.identifier(org.slug)}`);
+		
+		// Note: In real multi-tenant, you'd run migrations for each schema here.
+		// For this seeder, we assume the search_path will fall back to public if tables aren't cloned.
 	}
 
 	// 4. Create specialized users
@@ -112,90 +123,57 @@ async function seed() {
 			.where(eq(user.email, u.email));
 	}
 
-	// 5. Create some Content for Experts
-	console.log("\n📚 Seeding Knowledge Catalog...");
+	// 5. Seed Tenant Data using withOrganization
+	console.log("\n📚 Seeding Content & Progress (Per Tenant)...");
 
-	// Get Acme Specialist ID
-	const [acmeSpecialist] = await db.select().from(user).where(eq(user.email, "specialist@acmeinc.com")).limit(1);
-	if (acmeSpecialist) {
-		const [course1] = await db.insert(courses).values({
-			title: "Advanced React Patterns",
-			description: "Master high-level architecture in modern web apps.",
-			creatorId: acmeSpecialist.id,
-			published: true,
-		}).returning();
+	// Acme Data
+	await withOrganization("acme-inc", async () => {
+		const [specialist] = await db.select().from(user).where(eq(user.email, "specialist@acmeinc.com")).limit(1);
+		if (specialist) {
+			const [course] = await db.insert(courses).values({
+				title: "Advanced React Patterns",
+				description: "Master high-level architecture in modern web apps.",
+				creatorId: specialist.id,
+				published: true,
+			}).returning();
 
-		await db.insert(lessons).values([
-			{ courseId: course1.id, title: "Compound Components", order: 1, content: "Mastering the compound component pattern." },
-			{ courseId: course1.id, title: "Render Props vs Hooks", order: 2, content: "Understanding the evolution of state sharing." },
-			{ courseId: course1.id, title: "Performance Optimization", order: 3, content: "Memoization and reconciliation deep dive." },
-		]);
+			await db.insert(lessons).values([
+				{ courseId: course.id, title: "Compound Components", order: 1, content: "Mastering the compound component pattern." },
+				{ courseId: course.id, title: "Render Props vs Hooks", order: 2, content: "Understanding the evolution of state sharing." },
+			]);
 
-		const [course2] = await db.insert(courses).values({
-			title: "Drizzle ORM & Postgres",
-			description: "Typesafe database management for Next.js.",
-			creatorId: acmeSpecialist.id,
-			published: false,
-		}).returning();
+			const [m1] = await db.select().from(user).where(eq(user.email, "user1@acmeinc.com")).limit(1);
+			if (m1) {
+				await db.insert(courseEnrollment).values({ courseId: course.id, memberId: m1.id });
+				await db.insert(courseProgress).values({ courseId: course.id, memberId: m1.id, lessonsCompleted: 1 });
+			}
+		}
+	});
 
-		await db.insert(lessons).values([
-			{ courseId: course2.id, title: "Schema Definition", order: 1, content: "Defining tables and relations." },
-		]);
-	}
+	// Globex Data
+	await withOrganization("globex", async () => {
+		const [expert] = await db.select().from(user).where(eq(user.email, "expert@globex.com")).limit(1);
+		if (expert) {
+			const [course] = await db.insert(courses).values({
+				title: "Cyber-Security Essentials",
+				description: "Protecting corporate assets.",
+				creatorId: expert.id,
+				published: true,
+			}).returning();
 
-	// Get Globex Expert ID
-	const [globexExpert] = await db.select().from(user).where(eq(user.email, "expert@globex.com")).limit(1);
-	if (globexExpert) {
-		const [course] = await db.insert(courses).values({
-			title: "Cyber-Security Essentials",
-			description: "Protecting corporate assets in the digital age.",
-			creatorId: globexExpert.id,
-			published: true,
-		}).returning();
+			await db.insert(lessons).values([
+				{ courseId: course.id, title: "Network Security", order: 1, content: "Firewalls and VPNs." },
+			]);
 
-		await db.insert(lessons).values([
-			{ courseId: course.id, title: "Network Security", order: 1, content: "Firewalls and VPNs." },
-			{ courseId: course.id, title: "Phishing Prevention", order: 2, content: "Social engineering awareness." },
-		]);
-	}
+			const [m1] = await db.select().from(user).where(eq(user.email, "user1@globex.com")).limit(1);
+			if (m1) {
+				await db.insert(courseEnrollment).values({ courseId: course.id, memberId: m1.id });
+				await db.insert(courseProgress).values({ courseId: course.id, memberId: m1.id, lessonsCompleted: 1 });
+			}
+		}
+	});
 
-	// 6. Seed Progress for Members
-	console.log("📈 Seeding Member Progress...");
-	
-	const [acmeUser1] = await db.select().from(user).where(eq(user.email, "user1@acmeinc.com")).limit(1);
-	const [reactCourse] = await db.select().from(courses).where(eq(courses.title, "Advanced React Patterns")).limit(1);
-	
-	if (acmeUser1 && reactCourse) {
-		await db.insert(courseEnrollment).values({
-			courseId: reactCourse.id,
-			memberId: acmeUser1.id,
-		});
-
-		await db.insert(courseProgress).values({
-			courseId: reactCourse.id,
-			memberId: acmeUser1.id,
-			lessonsCompleted: 1,
-		});
-	}
-
-	const [globexEmployee] = await db.select().from(user).where(eq(user.email, "user1@globex.com")).limit(1);
-	const [securityCourse] = await db.select().from(courses).where(eq(courses.title, "Cyber-Security Essentials")).limit(1);
-
-	if (globexEmployee && securityCourse) {
-		await db.insert(courseEnrollment).values({
-			courseId: securityCourse.id,
-			memberId: globexEmployee.id,
-		});
-
-		await db.insert(courseProgress).values({
-			courseId: securityCourse.id,
-			memberId: globexEmployee.id,
-			lessonsCompleted: 2,
-			completedAt: new Date(),
-		});
-	}
-
-	console.log("\n🎉 High-density seeding complete!");
+	console.log("\n🎉 Multi-tenant seeding complete!");
 	process.exit(0);
 }
 
