@@ -24,6 +24,8 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
+import { getOrgAdminCourses } from "@/db/query/learning.query";
+
 export default async function OrgAdminDashboard() {
   const session = await getSession();
 
@@ -31,7 +33,10 @@ export default async function OrgAdminDashboard() {
     redirect("/auth/signin");
   }
 
-  const members = await getMyOrgMembers();
+  const [members, courses] = await Promise.all([
+    getMyOrgMembers(),
+    getOrgAdminCourses()
+  ]);
   const pendingMembers = members.filter((m) => m.role === "user");
   const activeMembers = members.filter((m) => m.role !== "user");
   const experts = activeMembers.filter((m) => m.role === "expert");
@@ -134,7 +139,7 @@ export default async function OrgAdminDashboard() {
             <BookOpen className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-black">—</div>
+            <div className="text-3xl font-black">{courses.length}</div>
             <p className="text-xs text-muted-foreground mt-1">
               <Link href="/dashboard/courses" className="hover:text-primary transition-colors">
                 View courses →
