@@ -1,18 +1,17 @@
 import "server-only";
-import { db, withOrganization } from "./index";
+import { db, withOrganization, TxType } from "./index";
 import { getOrgSlug } from "@/lib/session";
 
 /**
- * Executes a DB operation within the current user's organization schema.
- * If no organization is found in the session, it defaults to the 'public' schema.
+ * Executes a DB callback within the current user's org schema.
+ * If no org slug is found, falls back to the public schema using the base db.
  */
-export async function tenantDb<T>(callback: (tx: typeof db) => Promise<T>): Promise<T> {
+export async function tenantDb<T>(callback: (tx: TxType | typeof db) => Promise<T>): Promise<T> {
 	const orgSlug = await getOrgSlug();
 
 	if (!orgSlug) {
-		// Fallback to public schema for non-org users (though most learning data should be scoped)
 		return await callback(db);
 	}
 
-	return await withOrganization(orgSlug, () => callback(db));
+	return await withOrganization(orgSlug, (tx) => callback(tx));
 }

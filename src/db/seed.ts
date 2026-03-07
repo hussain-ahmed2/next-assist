@@ -1,8 +1,9 @@
 import "dotenv/config";
 import { db, withOrganization } from "@/db";
+import { provisionTenantSchema } from "@/db/provision";
 import { organizations, user, session, account, verification, site_config, courses, lessons, courseEnrollment, courseProgress } from "./schema";
 import { auth } from "@/lib/auth";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 async function seed() {
 	console.log("🔥 Purging database...");
@@ -70,11 +71,9 @@ async function seed() {
 	for (const org of orgConfigs) {
 		console.log(`📦 Provisioning Org: ${org.name} (${org.slug})`);
 		await db.insert(organizations).values(org);
-		// Provision the physical schema
-		await db.execute(sql`CREATE SCHEMA IF NOT EXISTS ${sql.identifier(org.slug)}`);
-		
-		// Note: In real multi-tenant, you'd run migrations for each schema here.
-		// For this seeder, we assume the search_path will fall back to public if tables aren't cloned.
+		// Create the Postgres schema and run tenant migrations inside it.
+		// This gives each org its own isolated courses, lessons, etc. tables.
+		await provisionTenantSchema(org.slug);
 	}
 
 	// 4. Create specialized users
@@ -123,52 +122,54 @@ async function seed() {
 			.where(eq(user.email, u.email));
 	}
 
-	// 5. Seed Tenant Data using withOrganization
+	// 5. Seed Tenant Data
+	// Queries run on the same db instance — tenant isolation is via org_slug on user records.
+	// Courses/lessons are linked to users who already have their org_slug set.
 	console.log("\n📚 Seeding Content & Progress (Per Tenant)...");
 
 	// Acme Data
-	await withOrganization("acme-inc", async () => {
-		const [specialist] = await db.select().from(user).where(eq(user.email, "specialist@acmeinc.com")).limit(1);
+	await withOrganization("acme-inc", async (tx) => {
+		const [specialist] = await tx.select().from(user).where(eq(user.email, "specialist@acmeinc.com")).limit(1);
 		if (specialist) {
-			const [course] = await db.insert(courses).values({
+			const [course] = await tx.insert(courses).values({
 				title: "Advanced React Patterns",
 				description: "Master high-level architecture in modern web apps.",
 				creatorId: specialist.id,
 				published: true,
 			}).returning();
 
-			await db.insert(lessons).values([
+			await tx.insert(lessons).values([
 				{ courseId: course.id, title: "Compound Components", order: 1, content: "Mastering the compound component pattern." },
 				{ courseId: course.id, title: "Render Props vs Hooks", order: 2, content: "Understanding the evolution of state sharing." },
 			]);
 
-			const [m1] = await db.select().from(user).where(eq(user.email, "user1@acmeinc.com")).limit(1);
+			const [m1] = await tx.select().from(user).where(eq(user.email, "user1@acmeinc.com")).limit(1);
 			if (m1) {
-				await db.insert(courseEnrollment).values({ courseId: course.id, memberId: m1.id });
-				await db.insert(courseProgress).values({ courseId: course.id, memberId: m1.id, lessonsCompleted: 1 });
+				await tx.insert(courseEnrollment).values({ courseId: course.id, memberId: m1.id });
+				await tx.insert(courseProgress).values({ courseId: course.id, memberId: m1.id, lessonsCompleted: 1 });
 			}
 		}
 	});
 
 	// Globex Data
-	await withOrganization("globex", async () => {
-		const [expert] = await db.select().from(user).where(eq(user.email, "expert@globex.com")).limit(1);
+	await withOrganization("globex", async (tx) => {
+		const [expert] = await tx.select().from(user).where(eq(user.email, "expert@globex.com")).limit(1);
 		if (expert) {
-			const [course] = await db.insert(courses).values({
+			const [course] = await tx.insert(courses).values({
 				title: "Cyber-Security Essentials",
 				description: "Protecting corporate assets.",
 				creatorId: expert.id,
 				published: true,
 			}).returning();
 
-			await db.insert(lessons).values([
+			await tx.insert(lessons).values([
 				{ courseId: course.id, title: "Network Security", order: 1, content: "Firewalls and VPNs." },
 			]);
 
-			const [m1] = await db.select().from(user).where(eq(user.email, "user1@globex.com")).limit(1);
+			const [m1] = await tx.select().from(user).where(eq(user.email, "user1@globex.com")).limit(1);
 			if (m1) {
-				await db.insert(courseEnrollment).values({ courseId: course.id, memberId: m1.id });
-				await db.insert(courseProgress).values({ courseId: course.id, memberId: m1.id, lessonsCompleted: 1 });
+				await tx.insert(courseEnrollment).values({ courseId: course.id, memberId: m1.id });
+				await tx.insert(courseProgress).values({ courseId: course.id, memberId: m1.id, lessonsCompleted: 1 });
 			}
 		}
 	});

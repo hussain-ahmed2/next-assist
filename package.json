@@ -7,9 +7,12 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "db:studio": "drizzle-kit studio",
     "db:generate": "drizzle-kit generate",
-    "db:push": "drizzle-kit push",
     "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "db:generate:tenant": "drizzle-kit generate --config drizzle.tenant.config.ts",
+    "db:migrate:tenant": "drizzle-kit migrate --config drizzle.tenant.config.ts",
     "db:seed": "tsx src/db/seed.ts",
     "db:reset": "tsx src/db/reset.ts",
     "db:fresh": "tsx src/db/reset.ts && drizzle-kit push && tsx src/db/seed.ts"

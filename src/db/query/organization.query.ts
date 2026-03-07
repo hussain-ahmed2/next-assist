@@ -1,6 +1,6 @@
 import "server-only";
 import { db } from "@/db";
-import { sql } from "drizzle-orm";
+import { provisionTenantSchema } from "@/db/provision";
 import { organizations } from "../schema/organizations";
 import { user } from "../schema/auth";
 import { eq, desc } from "drizzle-orm";
@@ -25,32 +25,22 @@ export async function getOrganizationBySlug(slug: string) {
  * Creates a new organization and provisions its dedicated database schema.
  */
 export async function createOrganizationWithSchema(name: string, slug: string, adminUserId: string, plan: string = "Free") {
-	return await db.transaction(async (tx) => {
-		// 1. Create the organization record in public schema
-		const [org] = await tx.insert(organizations).values({
-			name,
-			slug,
-			plan,
-		}).returning();
+	// 1. Insert org record + link admin user in a transaction
+	const [org] = await db.transaction(async (tx) => {
+		const [org] = await tx.insert(organizations).values({ name, slug, plan }).returning();
 
-		// 2. Create the physical postgres schema
-		// Note: Using sql.identifier for safety against SQL injection on identifiers
-		await tx.execute(sql`CREATE SCHEMA IF NOT EXISTS ${sql.identifier(slug)}`);
-
-		// 3. Link the admin user to this organization and set their role
 		await tx.update(user)
-			.set({ 
-				org_slug: slug, 
-				role: "org_admin" 
-			})
+			.set({ org_slug: slug, role: "org_admin" })
 			.where(eq(user.id, adminUserId));
 
-		// 4. (Optional) Run migrations for the new schema
-		// In a production app, you might trigger a worker or use a specialized migration tool here.
-		// For now, we'll assume the tables exist or will be pushed via drizzle-kit.
-
-		return org;
+		return [org];
 	});
+
+	// 2. Provision the Postgres schema + run tenant migrations (courses, lessons, etc.)
+	// Done outside the transaction — migrate() needs its own dedicated connection.
+	await provisionTenantSchema(slug);
+
+	return org;
 }
 /**
  * Updates an organization's details.

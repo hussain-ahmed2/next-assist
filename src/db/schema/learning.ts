@@ -18,9 +18,7 @@ export const courses = pgTable("courses", {
 
 export const lessons = pgTable("lessons", {
 	id: serial("id").primaryKey(),
-	courseId: integer("course_id")
-		.references(() => courses.id)
-		.notNull(),
+	courseId: integer("course_id").notNull(), // no FK — courses lives in tenant schema, not public
 	title: varchar({ length: 255 }).notNull(),
 	content: text(),
 	order: integer().default(0).notNull(),
@@ -31,9 +29,7 @@ export const lessons = pgTable("lessons", {
 
 export const courseEnrollment = pgTable("course_enrollment", {
 	id: serial("id").primaryKey(),
-	courseId: integer("course_id")
-		.references(() => courses.id)
-		.notNull(),
+	courseId: integer("course_id").notNull(), // no FK — courses lives in tenant schema, not public
 	memberId: text("member_id")
 		.references(() => user.id)
 		.notNull(),
@@ -43,9 +39,7 @@ export const courseEnrollment = pgTable("course_enrollment", {
 
 export const courseProgress = pgTable("course_progress", {
 	id: serial("id").primaryKey(),
-	courseId: integer("course_id")
-		.references(() => courses.id)
-		.notNull(),
+	courseId: integer("course_id").notNull(), // no FK — courses lives in tenant schema, not public
 	memberId: text("member_id")
 		.references(() => user.id)
 		.notNull(),

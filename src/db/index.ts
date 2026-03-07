@@ -14,17 +14,22 @@ const pool = new Pool({
 
 const db = globalForDrizzle.db || drizzle({ client: pool, logger: true, schema });
 
-async function withOrganization<T>(org_slug: string, callback: () => Promise<T>) {
-	// 1. Switch to tenant schema
-	await db.execute(sql`SET search_path TO ${sql.identifier(org_slug)}, public`);
+if (process.env.NODE_ENV !== "production") {
+	globalForDrizzle.db = db;
+}
 
-	// 2. Execute the callback (queries)
-	try {
-		return await callback();
-	} finally {
-		// 3. Reset to public (optional but good practice)
-		await db.execute(sql`SET search_path TO public`);
-	}
+export type TxType = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/**
+ * Executes a callback within a transaction scoped to the given org schema.
+ * SET LOCAL ensures the search_path resets automatically when the transaction ends.
+ * The same connection is guaranteed for both the SET and all subsequent queries.
+ */
+async function withOrganization<T>(org_slug: string, callback: (tx: TxType) => Promise<T>) {
+	return await db.transaction(async (tx) => {
+		await tx.execute(sql`SET LOCAL search_path TO ${sql.identifier(org_slug)}, public`);
+		return await callback(tx);
+	});
 }
 
 export { db, withOrganization };
