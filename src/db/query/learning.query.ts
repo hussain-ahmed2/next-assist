@@ -2,6 +2,8 @@ import "server-only";
 import { tenantDb } from "../tenant-db";
 import { courses, lessons, courseEnrollment, courseProgress } from "../schema/learning";
 import { eq, not, asc, and, isNotNull, isNull } from "drizzle-orm";
+import { db, withOrganization } from "..";
+import { organizations } from "../schema";
 
 // ============================================================================
 // SUPER ADMIN QUERIES - Full system access to all courses
@@ -49,17 +51,28 @@ export async function getSuperAdminCourseDetail(courseId: number) {
  * Get course statistics (Super Admin only)
  */
 export async function getSuperAdminCourseStats() {
-	return await tenantDb(async (db) => {
-		const active = await db.select().from(courses).where(eq(courses.deleted, false));
-		const published = active.filter((c) => c.published);
-		const draft = active.filter((c) => !c.published);
+	const orgs = await db.select().from(organizations);
 
-		return {
-			total: active.length,
-			published: published.length,
-			draft: draft.length,
-		};
+	const promises = orgs.map((org) => {
+		return withOrganization(org.slug, async (db) => {
+			const active = await db.select().from(courses).where(eq(courses.deleted, false));
+			const published = active.filter((c) => c.published);
+			const draft = active.filter((c) => !c.published);
+			return {
+				total: active.length,
+				published: published.length,
+				draft: draft.length,
+			};
+		});		
 	});
+
+	const stats = await Promise.all(promises);
+	return stats.reduce((acc, stat) => {
+		acc.total += stat.total;
+		acc.published += stat.published;
+		acc.draft += stat.draft;
+		return acc;
+	}, { total: 0, published: 0, draft: 0 });
 }
 
 /**
