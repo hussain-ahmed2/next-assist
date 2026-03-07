@@ -13,7 +13,7 @@ import { CreateUserSchema } from "@/validations/admin.validation";
 /**
  * Action for Org Admins to accept a user into their organization
  */
-export async function acceptUserToOrg(targetUserId: string, role: "member" | "expert" = "member") {
+export async function acceptUserToOrg(targetUserId: string, role: "member" | "expert" | "org_admin" = "member") {
 	const session = await getSession();
 	
 	// Security check: Only org_admins can accept users
@@ -224,6 +224,30 @@ export async function adminUpdateUser(id: string, data: { name?: string; role?: 
 
 		revalidatePath("/admin", "layout");
 		return { success: true, user };
+	});
+}
+
+/**
+ * Org Admin: Update their own organization details
+ */
+export async function actionUpdateOrgSettings(data: { name?: string; type?: string }) {
+	return await tc(async () => {
+		const session = await getSession();
+		if (!session || !session.user.org_slug) {
+			throw new ForbiddenError("You must be part of an organization");
+		}
+		
+		if (session.user.role !== "org_admin" && session.user.role !== "super_admin") {
+			throw new ForbiddenError("Only Organization Admins can update settings");
+		}
+
+		const { updateOrganization, getOrganizationBySlug } = await import("@/db/query/organization.query");
+		const org = await getOrganizationBySlug(session.user.org_slug);
+		if (!org) throw new Error("Organization not found");
+
+		const updated = await updateOrganization(org.id, data);
+		revalidatePath("/dashboard/settings");
+		return { success: true, org: updated };
 	});
 }
 

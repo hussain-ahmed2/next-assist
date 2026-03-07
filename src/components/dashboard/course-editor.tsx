@@ -64,9 +64,11 @@ type Course = {
 export function CourseEditor({
   course: initialCourse,
   lessons: initialLessons,
+  backUrl = "/dashboard/courses",
 }: {
   course: Course;
   lessons: Lesson[];
+  backUrl?: string;
 }) {
   const router = useRouter();
   const [course, setCourse] = useState(initialCourse);
@@ -202,7 +204,7 @@ export function CourseEditor({
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
         <Link
-          href="/dashboard/courses"
+          href={backUrl}
           className="hover:text-foreground flex items-center gap-1 transition-colors"
         >
           <ArrowLeft className="h-4 w-4" /> Courses

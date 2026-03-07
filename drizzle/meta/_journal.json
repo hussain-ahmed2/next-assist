@@ -15,6 +15,13 @@
       "when": 1772811417967,
       "tag": "0001_optimal_the_executioner",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1772868473547,
+      "tag": "0002_mean_texas_twister",
+      "breakpoints": true
     }
   ]
 }

@@ -133,7 +133,7 @@ export function AppSidebar({
     if (role === "super_admin") {
       return [
         {
-          title: "Platform",
+          title: "Platform Admin",
           url: "#",
           icon: SquareTerminal,
           isActive: true,
@@ -141,6 +141,7 @@ export function AppSidebar({
             { title: "Dashboard", url: "/admin/dashboard" },
             { title: "Organizations", url: "/admin/organizations" },
             { title: "Users", url: "/admin/users" },
+            { title: "Global Catalog", url: "/admin/courses" },
           ],
         },
         {
@@ -150,6 +151,70 @@ export function AppSidebar({
           items: [
             { title: "System Logs", url: "/admin/logs" },
             { title: "Settings", url: "/admin/settings" },
+          ],
+        },
+      ];
+    }
+
+    if (role === "expert") {
+      return [
+        {
+          title: "Workspace",
+          url: "#",
+          icon: Briefcase,
+          isActive: true,
+          items: [
+            { title: "Dashboard", url: "/workspace" },
+            { title: "My Courses", url: "/workspace/courses" },
+          ],
+        },
+        {
+          title: "Resources",
+          url: "#",
+          icon: BookOpen,
+          items: [
+            { title: "Tutorials", url: "#" },
+            { title: "Community", url: "#" },
+          ],
+        },
+        {
+          title: "Account",
+          url: "#",
+          icon: Settings2,
+          items: [
+            { title: "Profile", url: "/dashboard/settings" },
+          ],
+        },
+      ];
+    }
+
+    if (role === "member") {
+      return [
+        {
+          title: "Learning",
+          url: "#",
+          icon: GraduationCap,
+          isActive: true,
+          items: [
+            { title: "My Learning", url: "/learn" },
+            { title: "Course Catalog", url: "/learn/catalog" },
+          ],
+        },
+        {
+          title: "Achievements",
+          url: "#",
+          icon: Crown,
+          items: [
+            { title: "Certificates", url: "#" },
+            { title: "Progress", url: "#" },
+          ],
+        },
+        {
+          title: "Account",
+          url: "#",
+          icon: Settings2,
+          items: [
+            { title: "Profile", url: "/dashboard/settings" },
           ],
         },
       ];

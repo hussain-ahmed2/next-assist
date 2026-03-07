@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, startTransition } from "react";
+import { useState, useTransition, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { ColumnDef } from "@tanstack/react-table";
 import { AdvancedTable, TableCellViewer } from "@/components/ui/advanced-table";
@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { MoreHorizontal, Loader2 } from "lucide-react";
+import Link from "next/link";
 import { adminDeleteUser } from "@/actions/org.action";
 import { toast } from "sonner";
 
@@ -39,80 +40,11 @@ type UserRow = {
     status: "Done" | "In Progress" | "Not Started" | "Review";
 };
 
-const columns: ColumnDef<UserRow>[] = [
-    {
-        accessorKey: "name",
-        header: "Full Name",
-        id: "name",
-        cell: ({ row }) => (
-            <TableCellViewer header={row.original.name} item={row.original} />
-        ),
-    },
-    {
-        accessorKey: "email",
-        header: "Email Address",
-        cell: ({ row }) => <span className="text-muted-foreground">{row.original.email}</span>,
-    },
-    {
-        accessorKey: "role",
-        header: "Platform Role",
-        cell: ({ row }) => (
-            <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-[10px] font-bold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 border-transparent bg-secondary text-secondary-foreground">
-                {row.original.role.toUpperCase()}
-            </span>
-        ),
-    },
-    {
-        accessorKey: "org_slug",
-        header: "Organization",
-        cell: ({ row }) => (
-            row.original.org_slug ? (
-                <code className="relative rounded bg-muted px-[0.3rem] py-[0.2rem] font-mono text-xs font-semibold">
-                    {row.original.org_slug}
-                </code>
-            ) : (
-                <span className="text-xs text-muted-foreground italic">Platform Admin</span>
-            )
-        ),
-    },
-    {
-        id: "actions",
-        header: () => <span className="sr-only">Actions</span>,
-        cell: ({ row }) => (
-            <div className="flex justify-end">
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button
-                            variant="ghost"
-                            className="flex h-8 w-8 p-0 data-[state=open]:bg-muted"
-                        >
-                            <MoreHorizontal className="h-4 w-4" />
-                            <span className="sr-only">Open menu</span>
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-[160px]">
-                        <EditUserDialog 
-                            user={row.original} 
-                            trigger={
-                                <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                                    Edit details
-                                </DropdownMenuItem>
-                            }
-                        />
-                        <DropdownMenuItem className="text-destructive">
-                            Delete user
-                        </DropdownMenuItem>
-                    </DropdownMenuContent>
-                </DropdownMenu>
-            </div>
-        ),
-    }
-];
-
 export function UserTable({ data: initialData, orgSlug }: { data: UserRow[], orgSlug?: string }) {
     const router = useRouter();
     const [data, setData] = useState(initialData);
     const [isPending, startTrans] = useTransition();
+    const [editingUser, setEditingUser] = useState<UserRow | null>(null);
 
     const handleDelete = (id: string, name: string) => {
         startTrans(async () => {
@@ -121,7 +53,7 @@ export function UserTable({ data: initialData, orgSlug }: { data: UserRow[], org
                 if (result.success) {
                     toast.success(`"${name}" removed from platform`);
                     setData((prev) => prev.filter((u) => u.id !== id));
-                    startTransition(() => router.refresh());
+                    router.refresh();
                 } else {
                     toast.error(result.message || "Failed to delete");
                 }
@@ -131,7 +63,7 @@ export function UserTable({ data: initialData, orgSlug }: { data: UserRow[], org
         });
     };
 
-    const columns: ColumnDef<UserRow>[] = [
+    const columns: ColumnDef<UserRow>[] = useMemo(() => [
         {
             accessorKey: "name",
             header: "Full Name",
@@ -157,15 +89,22 @@ export function UserTable({ data: initialData, orgSlug }: { data: UserRow[], org
         {
             accessorKey: "org_slug",
             header: "Organization",
-            cell: ({ row }) => (
-                row.original.org_slug ? (
-                    <code className="relative rounded bg-muted px-[0.3rem] py-[0.2rem] font-mono text-xs font-semibold">
-                        {row.original.org_slug}
-                    </code>
-                ) : (
-                    <span className="text-xs text-muted-foreground italic">Platform Admin</span>
-                )
-            ),
+            cell: ({ row }) => {
+                if (row.original.org_slug) {
+                    return (
+                        <code className="relative rounded bg-muted px-[0.3rem] py-[0.2rem] font-mono text-xs font-semibold">
+                            {row.original.org_slug}
+                        </code>
+                    );
+                }
+                
+                // Fallback for null org_slug based on role
+                if (row.original.role === "super_admin") {
+                    return <span className="text-xs text-primary font-bold italic tracking-tight">System Global</span>;
+                }
+                
+                return <span className="text-xs text-muted-foreground italic">Standalone User</span>;
+            },
         },
         {
             id: "actions",
@@ -180,14 +119,14 @@ export function UserTable({ data: initialData, orgSlug }: { data: UserRow[], org
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-[160px]">
-                            <EditUserDialog
-                                user={row.original}
-                                trigger={
-                                    <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                                        Edit details
-                                    </DropdownMenuItem>
-                                }
-                            />
+                            <Link href={`/admin/users/${row.original.id}`}>
+                                <DropdownMenuItem className="cursor-pointer">
+                                    View profile
+                                </DropdownMenuItem>
+                            </Link>
+                            <DropdownMenuItem onSelect={() => setEditingUser(row.original)}>
+                                Edit details
+                            </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <AlertDialog>
                                 <AlertDialogTrigger asChild>
@@ -223,13 +162,22 @@ export function UserTable({ data: initialData, orgSlug }: { data: UserRow[], org
                 </div>
             ),
         },
-    ];
+    ], [isPending]);
 
     return (
-        <AdvancedTable
-            data={data}
-            columns={columns}
-            extraActions={<CreateUserDialog defaultOrgSlug={orgSlug} />}
-        />
+        <>
+            <AdvancedTable
+                data={data}
+                columns={columns}
+                extraActions={<CreateUserDialog defaultOrgSlug={orgSlug} />}
+            />
+            {editingUser && (
+                <EditUserDialog 
+                    user={editingUser} 
+                    open={!!editingUser} 
+                    onOpenChange={(open) => !open && setEditingUser(null)} 
+                />
+            )}
+        </>
     );
 }

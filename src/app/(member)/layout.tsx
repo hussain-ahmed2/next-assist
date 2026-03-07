@@ -8,14 +8,14 @@ import { Separator } from "@/components/ui/separator";
 import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
 
-export default async function DashboardLayout({
+export default async function MemberLayout({
 	children,
 }: {
 	children: React.ReactNode;
 }) {
 	const session = await getSession();
 
-	if (!session || (session.user.role !== "org_admin" && session.user.role !== "super_admin")) {
+	if (!session || (session.user.role !== "member" && session.user.role !== "user" && session.user.role !== "super_admin")) {
 		redirect("/auth/sign-in");
 	}
 
@@ -27,7 +27,7 @@ export default async function DashboardLayout({
 					<SidebarTrigger className="-ml-1" />
 					<Separator orientation="vertical" className="mr-2 h-4" />
 					<div className="flex items-center gap-2 font-medium">
-						Console / {session.user.org_slug}
+						Learn Console / {session.user.org_slug || "Platform"}
 					</div>
 				</header>
 				<div className="flex flex-1 flex-col gap-4 p-4 lg:p-8">

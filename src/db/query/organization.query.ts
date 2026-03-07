@@ -16,6 +16,11 @@ export async function getAllOrganizations(slug?: string) {
 	return await query.orderBy(desc(organizations.createdAt));
 }
 
+export async function getOrganizationBySlug(slug: string) {
+	const [org] = await db.select().from(organizations).where(eq(organizations.slug, slug));
+	return org || null;
+}
+
 /**
  * Creates a new organization and provisions its dedicated database schema.
  */

@@ -20,8 +20,20 @@ export const organizations = pgTable(
 	(table) => [index("organizations_slug_idx").on(table.slug)],
 );
 
+// global platform settings
+export const site_config = pgTable("site_config", {
+	id: serial("id").primaryKey(),
+	platformName: varchar("platform_name", { length: 255 }).default("NextAssist").notNull(),
+	supportEmail: varchar("support_email", { length: 255 }).default("support@nextassist.com").notNull(),
+	isRegistrationEnabled: boolean("is_registration_enabled").default(true).notNull(),
+	maintenanceMode: boolean("maintenance_mode").default(false).notNull(),
+
+	...timestamps,
+});
+
 export type Organization = typeof organizations.$inferSelect;
 export type InsertOrganization = typeof organizations.$inferInsert;
+export type SiteConfig = typeof site_config.$inferSelect;
 
 export const organizations_relations = relations(organizations, ({ many }) => ({
 	users: many(user),

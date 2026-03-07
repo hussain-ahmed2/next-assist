@@ -35,9 +35,22 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-export function EditOrgDialog({ organization, trigger }: { organization: any; trigger?: React.ReactNode }) {
-  const [open, setOpen] = useState(false);
+export function EditOrgDialog({ 
+  organization, 
+  trigger,
+  open: controlledOpen,
+  onOpenChange: controlledOnOpenChange
+}: { 
+  organization: any; 
+  trigger?: React.ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}) {
+  const [internalOpen, setInternalOpen] = useState(false);
   const [isPending, setIsPending] = useState(false);
+
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = controlledOnOpenChange ?? setInternalOpen;
 
   const {
     register,

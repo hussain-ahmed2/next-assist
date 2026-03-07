@@ -18,6 +18,14 @@ export async function getAllUsers(orgSlug?: string) {
 }
 
 /**
+ * Gets a single user by ID.
+ */
+export async function getUserById(userId: string) {
+	const [u] = await db.select().from(user).where(eq(user.id, userId));
+	return u;
+}
+
+/**
  * Updates a user's role and organization status.
  * Used by org_admins to 'accept' users into their organization.
  */

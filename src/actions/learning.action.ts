@@ -38,6 +38,21 @@ import {
 	updateLesson,
 	reorderLessons,
 	softDeleteLesson,
+	// Enrollment Queries
+	enrollMemberInCourse,
+	isMemberEnrolled,
+	getMemberEnrollments,
+	getCourseEnrollments,
+	getCourseEnrollmentCount,
+	removeMemberFromCourse,
+	// Progress Queries
+	initializeOrGetCourseProgress,
+	getMemberCourseProgressDetail,
+	updateCourseProgress,
+	markCourseCompleted,
+	getMemberCompletedCourses,
+	getMemberInProgressCourses,
+	getCourseCompletionStats,
 } from "@/db/query/learning.query";
 import { tc } from "@/lib/async";
 import { revalidatePath } from "next/cache";
@@ -488,22 +503,19 @@ export async function getLessonAction(lessonId: number) {
 /**
  * Create lesson (requires org_admin or expert role)
  */
-export async function createLessonAction(
-	courseId: number,
-	title: string,
-	content?: string
-) {
+export async function createLessonAction(courseId: number, title: string, content?: string) {
 	const session = await getSession();
-	if (!session || !["org_admin", "expert"].includes(session.user.role)) {
+	if (!session || !["org_admin", "expert"].includes(session.user.role!)) {
 		throw new ForbiddenError("Only org admins and experts can create lessons");
 	}
 
-	const result = await tc(async () =>
-		await createLesson({
-			courseId: courseId as number,
-			title: title as string,
-			content: content ?? undefined,
-		})
+	const result = await tc(
+		async () =>
+			await createLesson({
+				courseId: courseId as number,
+				title: title as string,
+				content: content ?? undefined,
+			}),
 	);
 
 	if (result.success) {
@@ -518,15 +530,16 @@ export async function createLessonAction(
  */
 export async function updateLessonAction(lessonId: number, title: string, content?: string) {
 	const session = await getSession();
-	if (!session || !["org_admin", "expert"].includes(session.user.role)) {
+	if (!session || !["org_admin", "expert"].includes(session.user.role!)) {
 		throw new ForbiddenError("Only org admins and experts can update lessons");
 	}
 
-	const result = await tc(async () =>
-		await updateLesson(lessonId, {
-			title: title as string,
-			content: content ?? undefined,
-		})
+	const result = await tc(
+		async () =>
+			await updateLesson(lessonId, {
+				title: title as string,
+				content: content ?? undefined,
+			}),
 	);
 
 	if (result.success) {
@@ -541,7 +554,7 @@ export async function updateLessonAction(lessonId: number, title: string, conten
  */
 export async function reorderLessonsAction(courseId: number, lessonOrder: { id: number; order: number }[]) {
 	const session = await getSession();
-	if (!session || !["org_admin", "expert"].includes(session.user.role)) {
+	if (!session || !["org_admin", "expert"].includes(session.user.role!)) {
 		throw new ForbiddenError("Only org admins and experts can reorder lessons");
 	}
 
@@ -559,7 +572,7 @@ export async function reorderLessonsAction(courseId: number, lessonOrder: { id: 
  */
 export async function deleteLessonAction(lessonId: number) {
 	const session = await getSession();
-	if (!session || !["org_admin", "expert"].includes(session.user.role)) {
+	if (!session || !["org_admin", "expert"].includes(session.user.role!)) {
 		throw new ForbiddenError("Only org admins and experts can delete lessons");
 	}
 
@@ -570,4 +583,180 @@ export async function deleteLessonAction(lessonId: number) {
 	}
 
 	return result;
+}
+
+// ============================================================================
+// ENROLLMENT ACTIONS
+// ============================================================================
+
+/**
+ * Member: Enroll in a course
+ */
+export async function memberEnrollInCourse(courseId: number) {
+	const session = await getSession();
+	if (!session || session.user.role !== "member") {
+		throw new ForbiddenError("Only members can enroll in courses");
+	}
+
+	const result = await tc(async () => enrollMemberInCourse(courseId, session.user.id || ""));
+
+	if (result.success) {
+		revalidatePath("/learn");
+	}
+
+	return result;
+}
+
+/**
+ * Check if member is enrolled
+ */
+export async function checkMemberEnrollment(courseId: number) {
+	const session = await getSession();
+	if (!session || session.user.role !== "member") {
+		throw new ForbiddenError("Only members can check enrollment");
+	}
+
+	return await tc(async () => isMemberEnrolled(courseId, session.user.id || ""));
+}
+
+/**
+ * Org Admin: Get course enrollments
+ */
+export async function orgAdminGetCourseEnrollments(courseId: number) {
+	const session = await getSession();
+	if (!session || session.user.role !== "org_admin") {
+		throw new ForbiddenError("Only org admins can view enrollments");
+	}
+
+	return await tc(async () => await getCourseEnrollments(courseId));
+}
+
+/**
+ * Org Admin: Get enrollment count
+ */
+export async function orgAdminGetEnrollmentCount(courseId: number) {
+	const session = await getSession();
+	if (!session || session.user.role !== "org_admin") {
+		throw new ForbiddenError("Only org admins can view enrollment count");
+	}
+
+	return await tc(async () => await getCourseEnrollmentCount(courseId));
+}
+
+/**
+ * Org Admin: Remove member from course
+ */
+export async function orgAdminRemoveMemberFromCourse(courseId: number, memberId: string) {
+	const session = await getSession();
+	if (!session || session.user.role !== "org_admin") {
+		throw new ForbiddenError("Only org admins can remove members");
+	}
+
+	const result = await tc(async () => removeMemberFromCourse(courseId, memberId));
+
+	if (result.success) {
+		revalidatePath("/dashboard/courses");
+	}
+
+	return result;
+}
+
+// ============================================================================
+// PROGRESS ACTIONS
+// ============================================================================
+
+/**
+ * Member: Initialize course progress
+ */
+export async function memberInitializeCourseProgress(courseId: number) {
+	const session = await getSession();
+	if (!session || session.user.role !== "member") {
+		throw new ForbiddenError("Only members can initialize progress");
+	}
+
+	return await tc(async () => initializeOrGetCourseProgress(courseId, session.user.id || ""));
+}
+
+/**
+ * Member: Get detailed progress
+ */
+export async function memberGetDetailedProgress(courseId: number) {
+	const session = await getSession();
+	if (!session || session.user.role !== "member") {
+		throw new ForbiddenError("Only members can access progress");
+	}
+
+	return await tc(async () => getMemberCourseProgressDetail(courseId, session.user.id || ""));
+}
+
+/**
+ * Member: Update progress (mark lessons completed)
+ */
+export async function memberUpdateProgress(courseId: number, lessonsCompleted: number) {
+	const session = await getSession();
+	if (!session || session.user.role !== "member") {
+		throw new ForbiddenError("Only members can update progress");
+	}
+
+	const result = await tc(async () => updateCourseProgress(courseId, session.user.id || "", lessonsCompleted));
+
+	if (result.success) {
+		revalidatePath("/learn");
+	}
+
+	return result;
+}
+
+/**
+ * Member: Mark course completed
+ */
+export async function memberMarkCourseCompleted(courseId: number) {
+	const session = await getSession();
+	if (!session || session.user.role !== "member") {
+		throw new ForbiddenError("Only members can mark courses complete");
+	}
+
+	const result = await tc(async () => markCourseCompleted(courseId, session.user.id || ""));
+
+	if (result.success) {
+		revalidatePath("/learn");
+	}
+
+	return result;
+}
+
+/**
+ * Member: Get completed courses
+ */
+export async function memberGetCompletedCourses() {
+	const session = await getSession();
+	if (!session || session.user.role !== "member") {
+		throw new ForbiddenError("Only members can view completed courses");
+	}
+
+	return await tc(async () => getMemberCompletedCourses(session.user.id || ""));
+}
+
+/**
+ * Member: Get in-progress courses
+ */
+export async function memberGetInProgressCourses() {
+	const session = await getSession();
+	if (!session || session.user.role !== "member") {
+		throw new ForbiddenError("Only members can view in-progress courses");
+	}
+
+	return await tc(async () => getMemberInProgressCourses(session.user.id || ""));
+}
+
+/**
+ * Expert/Org Admin: Get course completion stats
+ */
+export async function getCourseCompletionStatsAction(courseId: number) {
+	const session = await getSession();
+	if (!session || !["expert", "org_admin"].includes(session.user.role!)) {
+		throw new ForbiddenError("Only experts and org admins can view completion stats");
+	}
+
+	return await tc(async () => getCourseCompletionStats(courseId));
 }

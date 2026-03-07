@@ -49,9 +49,23 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-export function EditUserDialog({ user, trigger }: { user: any; trigger?: React.ReactNode }) {
-  const [open, setOpen] = useState(false);
+export function EditUserDialog({ 
+  user, 
+  trigger,
+  open: controlledOpen,
+  onOpenChange: controlledOnOpenChange 
+}: { 
+  user: any; 
+  trigger?: React.ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}) {
+  const [internalOpen, setInternalOpen] = useState(false);
   const [isPending, setIsPending] = useState(false);
+
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = controlledOnOpenChange ?? setInternalOpen;
+
   const [orgs, setOrgs] = useState<{ name: string; slug: string }[]>([]);
   const [isOrgPopoverOpen, setIsOrgPopoverOpen] = useState(false);
 

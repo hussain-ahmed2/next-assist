@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { acceptUserToOrg, denyUserFromOrg } from "@/actions/org.action";
 import { toast } from "sonner";
+import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table";
 
 interface Member {
   id: string;

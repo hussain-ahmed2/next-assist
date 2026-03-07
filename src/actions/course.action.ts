@@ -14,26 +14,34 @@ import {
   createLesson,
   updateLesson,
   softDeleteLesson,
+  reorderLessons,
+  enrollMemberInCourse,
 } from "@/db/query/learning.query";
 
-function requireOrgAdmin(session: Awaited<ReturnType<typeof getSession>>) {
-  if (!session || session.user.role !== "org_admin") {
-    throw new ForbiddenError("Only Org Admins can perform this action");
+async function requireCourseEditor(session: Awaited<ReturnType<typeof getSession>>) {
+  if (!session) throw new ForbiddenError("Not authenticated");
+  const role = session.user.role;
+  if (role !== "org_admin" && role !== "expert" && role !== "super_admin") {
+    throw new ForbiddenError("Only Admins and Experts can perform this action");
   }
 }
 
 export async function actionGetCourses() {
   const session = await getSession();
-  requireOrgAdmin(session);
+  await requireCourseEditor(session);
   return await getCourses();
 }
 
 export async function actionCreateCourse(data: { title: string; description?: string }) {
   return await tc(async () => {
     const session = await getSession();
-    requireOrgAdmin(session);
-    const course = await createCourse({ title: data.title, description: data.description || null });
-    revalidatePath("/dashboard/courses");
+    await requireCourseEditor(session);
+    const course = await createCourse({ 
+      title: data.title, 
+      description: data.description || null,
+      creatorId: session!.user.id 
+    });
+    revalidatePaths(null);
     return course;
   });
 }
@@ -41,10 +49,9 @@ export async function actionCreateCourse(data: { title: string; description?: st
 export async function actionUpdateCourse(id: number, data: { title?: string; description?: string; published?: boolean }) {
   return await tc(async () => {
     const session = await getSession();
-    requireOrgAdmin(session);
+    await requireCourseEditor(session);
     const course = await updateCourse(id, data);
-    revalidatePath("/dashboard/courses");
-    revalidatePath(`/dashboard/courses/${id}`);
+    revalidatePaths(id);
     return course;
   });
 }
@@ -52,31 +59,31 @@ export async function actionUpdateCourse(id: number, data: { title?: string; des
 export async function actionDeleteCourse(id: number) {
   return await tc(async () => {
     const session = await getSession();
-    requireOrgAdmin(session);
+    await requireCourseEditor(session);
     await softDeleteCourse(id);
-    revalidatePath("/dashboard/courses");
+    revalidatePaths(null);
     return { success: true };
   });
 }
 
 export async function actionGetCourseById(id: number) {
   const session = await getSession();
-  requireOrgAdmin(session);
+  await requireCourseEditor(session);
   return await getCourseById(id);
 }
 
 export async function actionGetLessons(courseId: number) {
   const session = await getSession();
-  requireOrgAdmin(session);
+  await requireCourseEditor(session);
   return await getLessons(courseId);
 }
 
 export async function actionCreateLesson(courseId: number, data: { title: string; content?: string; order?: number }) {
   return await tc(async () => {
     const session = await getSession();
-    requireOrgAdmin(session);
+    await requireCourseEditor(session);
     const lesson = await createLesson({ courseId, title: data.title, content: data.content, order: data.order ?? 0 });
-    revalidatePath(`/dashboard/courses/${courseId}`);
+    revalidatePaths(courseId);
     return lesson;
   });
 }
@@ -84,9 +91,9 @@ export async function actionCreateLesson(courseId: number, data: { title: string
 export async function actionUpdateLesson(id: number, courseId: number, data: { title?: string; content?: string; order?: number }) {
   return await tc(async () => {
     const session = await getSession();
-    requireOrgAdmin(session);
+    await requireCourseEditor(session);
     const lesson = await updateLesson(id, data);
-    revalidatePath(`/dashboard/courses/${courseId}`);
+    revalidatePaths(courseId);
     return lesson;
   });
 }
@@ -94,9 +101,42 @@ export async function actionUpdateLesson(id: number, courseId: number, data: { t
 export async function actionDeleteLesson(id: number, courseId: number) {
   return await tc(async () => {
     const session = await getSession();
-    requireOrgAdmin(session);
+    await requireCourseEditor(session);
     await softDeleteLesson(id);
-    revalidatePath(`/dashboard/courses/${courseId}`);
+    revalidatePaths(courseId);
     return { success: true };
   });
+}
+
+export async function actionEnrollMember(courseId: number) {
+  return await tc(async () => {
+    const session = await getSession();
+    if (!session) throw new ForbiddenError("Not authenticated");
+    
+    await enrollMemberInCourse(courseId, session.user.id);
+    
+    revalidatePaths(courseId);
+    return { success: true };
+  });
+}
+
+export async function actionGetAllCourses() {
+  const session = await getSession();
+  if (!session || session.user.role !== "super_admin") {
+    throw new ForbiddenError("Only Super Admins can perform this action");
+  }
+  const { getSuperAdminAllCourses } = await import("@/db/query/learning.query");
+  return await getSuperAdminAllCourses();
+}
+
+function revalidatePaths(courseId: number | null) {
+    revalidatePath("/dashboard/courses");
+    revalidatePath("/workspace/courses");
+    revalidatePath("/learn/catalog");
+    revalidatePath("/learn");
+    if (courseId) {
+        revalidatePath(`/dashboard/courses/${courseId}`);
+        revalidatePath(`/workspace/courses/${courseId}`);
+        revalidatePath(`/learn/courses/${courseId}`);
+    }
 }
