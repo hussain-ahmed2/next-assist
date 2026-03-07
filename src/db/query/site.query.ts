@@ -4,7 +4,7 @@ import { site_config } from "../schema/organizations";
 import { eq } from "drizzle-orm";
 
 export async function getSiteConfig() {
-	let config = await db.query.site_config.findFirst();
+	let [config] = await db.select().from(site_config).limit(1);
 	
 	if (!config) {
 		// Initialize if it doesn't exist

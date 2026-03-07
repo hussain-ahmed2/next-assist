@@ -1,5 +1,6 @@
 import SignUpForm from "@/components/auth/signup-form";
 import Link from "next/link";
+import { Suspense } from "react";
 
 export default function SignUpPage() {
   return (
@@ -11,7 +12,13 @@ export default function SignUpPage() {
         </p>
       </div>
 
-      <SignUpForm />
+      <Suspense
+        fallback={
+          <div className="h-48 w-full animate-pulse bg-muted rounded-xl" />
+        }
+      >
+        <SignUpForm />
+      </Suspense>
 
       <p className="text-center text-sm text-muted-foreground">
         Already have an account?{" "}

@@ -21,19 +21,19 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
-  IconChevronDown,
-  IconChevronLeft,
-  IconChevronRight,
-  IconChevronsLeft,
-  IconChevronsRight,
-  IconCircleCheckFilled,
-  IconDotsVertical,
-  IconGripVertical,
-  IconLayoutColumns,
-  IconLoader,
-  IconPlus,
-  IconTrendingUp,
-} from "@tabler/icons-react";
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  CircleCheck,
+  EllipsisVertical,
+  GripVertical,
+  Columns,
+  Loader2,
+  Plus,
+  TrendingUp,
+} from "lucide-react";
 import {
   flexRender,
   getCoreRowModel,
@@ -125,7 +125,7 @@ function DragHandle({ id }: { id: number }) {
       size="icon"
       className="size-7 text-muted-foreground hover:bg-transparent"
     >
-      <IconGripVertical className="size-3 text-muted-foreground" />
+      <GripVertical className="size-3 text-muted-foreground" />
       <span className="sr-only">Drag to reorder</span>
     </Button>
   );
@@ -188,9 +188,9 @@ const columns: ColumnDef<z.infer<typeof schema>>[] = [
     cell: ({ row }) => (
       <Badge variant="outline" className="px-1.5 text-muted-foreground">
         {row.original.status === "Done" ? (
-          <IconCircleCheckFilled className="fill-green-500 dark:fill-green-400" />
+          <CircleCheck className="fill-green-500 text-white dark:fill-green-400" />
         ) : (
-          <IconLoader />
+          <Loader2 className="animate-spin" />
         )}
         {row.original.status}
       </Badge>
@@ -290,7 +290,7 @@ const columns: ColumnDef<z.infer<typeof schema>>[] = [
             className="flex size-8 text-muted-foreground data-[state=open]:bg-muted"
             size="icon"
           >
-            <IconDotsVertical />
+            <EllipsisVertical />
             <span className="sr-only">Open menu</span>
           </Button>
         </DropdownMenuTrigger>
@@ -434,10 +434,10 @@ export function DataTable({
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm">
-                <IconLayoutColumns />
+                <Columns />
                 <span className="hidden lg:inline">Customize Columns</span>
                 <span className="lg:hidden">Columns</span>
-                <IconChevronDown />
+                <ChevronDown />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
@@ -465,7 +465,7 @@ export function DataTable({
             </DropdownMenuContent>
           </DropdownMenu>
           <Button variant="outline" size="sm">
-            <IconPlus />
+            <Plus />
             <span className="hidden lg:inline">Add Section</span>
           </Button>
         </div>
@@ -567,7 +567,7 @@ export function DataTable({
                 disabled={!table.getCanPreviousPage()}
               >
                 <span className="sr-only">Go to first page</span>
-                <IconChevronsLeft />
+                <ChevronsLeft />
               </Button>
               <Button
                 variant="outline"
@@ -577,7 +577,7 @@ export function DataTable({
                 disabled={!table.getCanPreviousPage()}
               >
                 <span className="sr-only">Go to previous page</span>
-                <IconChevronLeft />
+                <ChevronLeft />
               </Button>
               <Button
                 variant="outline"
@@ -587,7 +587,7 @@ export function DataTable({
                 disabled={!table.getCanNextPage()}
               >
                 <span className="sr-only">Go to next page</span>
-                <IconChevronRight />
+                <ChevronRight />
               </Button>
               <Button
                 variant="outline"
@@ -597,7 +597,7 @@ export function DataTable({
                 disabled={!table.getCanNextPage()}
               >
                 <span className="sr-only">Go to last page</span>
-                <IconChevronsRight />
+                <ChevronsRight />
               </Button>
             </div>
           </div>
@@ -706,7 +706,7 @@ function TableCellViewer({ item }: { item: z.infer<typeof schema> }) {
               <div className="grid gap-2">
                 <div className="flex gap-2 leading-none font-medium">
                   Trending up by 5.2% this month{" "}
-                  <IconTrendingUp className="size-4" />
+                  <TrendingUp className="size-4" />
                 </div>
                 <div className="text-muted-foreground">
                   Showing total visitors for the last 6 months. This is just

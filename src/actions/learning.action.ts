@@ -148,7 +148,7 @@ export async function orgAdminCreateCourse(title: string, description: string) {
 		throw new ForbiddenError("Only org admins can create courses");
 	}
 
-	const result = await tc(async () => await createCourse({ title, description, published: false }));
+	const result = await tc(async () => await createCourse({ title, description, creatorId: session.user.id, published: false }));
 
 	if (result.success) {
 		revalidatePath("/dashboard/courses");
@@ -302,7 +302,7 @@ export async function expertCreateCourse(title: string, description: string) {
 		throw new ForbiddenError("Only experts can create courses");
 	}
 
-	const result = await tc(async () => await createCourse({ title, description, published: false }));
+	const result = await tc(async () => await createCourse({ title, description, creatorId: session.user.id, published: false }));
 
 	if (result.success) {
 		revalidatePath("/workspace");
@@ -472,7 +472,8 @@ export async function getMyCourses() {
  * Legacy: Add course (used by existing code)
  */
 export async function addCourse(title: string, description: string) {
-	const result = await tc(async () => await createCourse({ title, description }));
+	const session = await getSession();
+	const result = await tc(async () => await createCourse({ title, description, creatorId: session?.user.id || "" }));
 	if (result.success) {
 		revalidatePath("/");
 	}
