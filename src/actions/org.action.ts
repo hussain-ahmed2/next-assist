@@ -14,6 +14,7 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { CreateUserSchema } from "@/validations/admin.validation";
 import axios from "axios";
+import { getAuth0ManagementToken } from "@/lib/auth0.utility";
 
 /**
  * Action for Org Admins to accept a user into their organization
@@ -281,6 +282,16 @@ export async function actionUpdateOrgSettings(data: {
 				data.ssoConfigured = true;
 				// If we successfully found the OIDC config at the discovery URL, save that URL
 				data.ssoMetadata = data.ssoProvider !== "none" ? metadataUrl : data.ssoMetadata;
+
+				// EXTRA: Validate M2M credentials if it's Auth0
+				if (data.ssoProvider.toLowerCase() === "auth0" && data.ssoClientId && data.ssoClientSecret) {
+					try {
+						await getAuth0ManagementToken(data.ssoMetadata, data.ssoClientId, data.ssoClientSecret);
+						console.log("🗝️ Auth0 M2M Handshake Successful for:", slug);
+					} catch (e: any) {
+						throw new Error(`Auth0 Credential Validation Failed: Your Client ID or Secret is incorrect.`);
+					}
+				}
 			} catch (error: any) {
 				const msg = error.response ? `Server responded with ${error.response.status}` : error.message;
 				throw new Error(`SSO Verification Failed: ${msg}. Check your Metadata URL.`);
