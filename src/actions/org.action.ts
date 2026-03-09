@@ -5,7 +5,7 @@ import { getOrgMembers, updateMemberStatus, getAllUsers } from "@/db/query/user.
 import { getAllOrganizations, createOrganizationWithSchema } from "@/db/query/organization.query";
 import { db } from "@/db";
 import { invites, auditLogs } from "@/db/schema/logs";
-import { sql } from "drizzle-orm";
+import { sql, eq } from "drizzle-orm";
 import { getSession } from "@/lib/session";
 import { revalidatePath } from "next/cache";
 import { tc } from "@/lib/async";
@@ -237,9 +237,9 @@ export async function adminUpdateUser(id: string, data: { name?: string; role?: 
  */
 export async function actionUpdateOrgSettings(data: { 
 	name?: string; 
-	type?: string;
-	ssoProvider?: string;
-	ssoMetadata?: string;
+	type?: string; 
+	ssoProvider?: string; 
+	ssoMetadata?: string; 
 	ssoClientId?: string;
 	ssoClientSecret?: string;
 	ssoConfigured?: boolean;
@@ -256,10 +256,6 @@ export async function actionUpdateOrgSettings(data: {
 			throw new ForbiddenError("Only Organization Admins can update settings");
 		}
 
-		const { organizations } = await import("@/db/schema");
-		const { db } = await import("@/db");
-		const { eq } = await import("drizzle-orm");
-		
 		// SSO Validation
 		if (data.ssoProvider && data.ssoProvider !== "none" && data.ssoMetadata) {
 			try {

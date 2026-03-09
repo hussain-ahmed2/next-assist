@@ -7,7 +7,7 @@ import { type OnboardingData, onboardingSchema } from "@/validations/onboarding.
 import { eq } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
-import { auditLogs, invites } from "@/db/schema/logs";
+import { auditLogs } from "@/db/schema/logs";
 import { tc } from "@/lib/async";
 
 export async function submitOnboarding(data: OnboardingData) {
@@ -47,6 +47,8 @@ export async function submitOnboarding(data: OnboardingData) {
 				throw new Error("Failed to create admin user account");
 			}
 
+			const adminId = result.user.id;
+
 			await tx.update(user)
 				.set({ 
 					phone: validated.phone, 
@@ -70,22 +72,25 @@ export async function submitOnboarding(data: OnboardingData) {
 				
 				await tx.insert(auditLogs).values({
 					org_slug: orgSlug,
-					actor_id: result.user.id,
+					actor_id: adminId,
 					action: "BILLING_ADMIN_CREATED",
 					entity_type: "user",
 					entity_id: billingId,
 					metadata: { email: validated.billingAdminEmail },
-				});
+				} as any);
 			}
 
 			await tx.insert(auditLogs).values({
 				org_slug: orgSlug,
-				actor_id: result.user.id,
+				actor_id: adminId,
 				action: "ORG_PROVISIONED",
 				entity_type: "organization",
 				entity_id: orgSlug,
-				metadata: { plan: validated.planId, iom: validated.isIomEnabled },
-			});
+				metadata: { 
+                    plan: validated.planId, 
+                    iom: validated.isIomEnabled 
+                },
+			} as any);
 
 			return { message: "Onboarding completed successfully!" };
 		});

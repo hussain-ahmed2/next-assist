@@ -27,7 +27,7 @@ export async function getOrganizationBySlug(slug: string) {
 export async function createOrganizationWithSchema(name: string, slug: string, adminUserId: string, plan: string = "Free") {
 	// 1. Insert org record + link admin user in a transaction
 	const [org] = await db.transaction(async (tx) => {
-		const [org] = await tx.insert(organizations).values({ name, slug, plan }).returning();
+		const [org] = await tx.insert(organizations).values({ name, slug, plan: plan as any }).returning();
 
 		await tx.update(user)
 			.set({ org_slug: slug, role: "org_admin" })
