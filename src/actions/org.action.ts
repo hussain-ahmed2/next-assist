@@ -423,7 +423,7 @@ export async function actionGetSSOUrl(email: string) {
 			throw new Error("Client ID is missing. Please configure it in Settings.");
 		}
 
-		const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/auth/sso/callback`;
+		const redirectUri = `${process.env.BETTER_AUTH_URL || 'http://localhost:3000'}/auth/sso/callback`;
 		
 		const params = new URLSearchParams({
 			client_id: clientId,
