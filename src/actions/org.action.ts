@@ -498,17 +498,24 @@ export async function actionExchangeSSOCode(code: string, slug: string) {
 			throw new Error(`Account not found for ${profile.email}. Please contact your administrator.`);
 		}
 
-		// 4. Use Better Auth's Official Admin API to provision a trusted session
-		// We use the BETTER_AUTH_SECRET to bypass the session requirement for this server-side call
+		// 4. Provision a trusted session via Better Auth
+		// We use the admin impersonateUser API to act as the verified user
+		// and generate a valid session token/set cookies.
+		const h = await headers();
+		const headersObj = Object.fromEntries(h.entries());
+		
+		// Add the secret to bypass the admin check on the server
+		headersObj["authorization"] = `Bearer ${process.env.BETTER_AUTH_SECRET}`;
+
 		const loginResponse = await auth.api.impersonateUser({
 			body: {
 				userId: existingUser.id,
 			},
-			headers: await headers(),
+			headers: headersObj,
 		});
 
 		if (!loginResponse) {
-			throw new Error("Better Auth was unable to create a session for the verified user.");
+			throw new Error("Better Auth was unable to establish a session for the user.");
 		}
 
 		return { 
