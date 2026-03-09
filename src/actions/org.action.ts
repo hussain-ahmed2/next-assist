@@ -2,6 +2,8 @@
 
 import { getOrgMembers, updateMemberStatus, getAllUsers } from "@/db/query/user.query";
 import { getAllOrganizations, createOrganizationWithSchema } from "@/db/query/organization.query";
+import { db } from "@/db";
+import { invites, auditLogs } from "@/db/schema/logs";
 import { getSession } from "@/lib/session";
 import { revalidatePath } from "next/cache";
 import { tc } from "@/lib/async";
@@ -9,6 +11,7 @@ import { ForbiddenError } from "@/lib/errors";
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { CreateUserSchema } from "@/validations/admin.validation";
+import axios from "axios";
 
 /**
  * Action for Org Admins to accept a user into their organization
@@ -202,7 +205,7 @@ export async function adminUpdateOrganization(id: number, data: { name?: string;
 		}
 
 		const { updateOrganization } = await import("@/db/query/organization.query");
-		const org = await updateOrganization(id, data);
+		const org = await updateOrganization(id, data as any);
 		
 		revalidatePath("/admin", "layout");
 		return { success: true, org };
@@ -230,7 +233,14 @@ export async function adminUpdateUser(id: string, data: { name?: string; role?: 
 /**
  * Org Admin: Update their own organization details
  */
-export async function actionUpdateOrgSettings(data: { name?: string; type?: string }) {
+export async function actionUpdateOrgSettings(data: { 
+	name?: string; 
+	type?: string;
+	ssoProvider?: string;
+	ssoMetadata?: string;
+	ssoConfigured?: boolean;
+	isIomEnabled?: boolean;
+}) {
 	return await tc(async () => {
 		const session = await getSession();
 		if (!session || !session.user.org_slug) {
@@ -245,9 +255,79 @@ export async function actionUpdateOrgSettings(data: { name?: string; type?: stri
 		const org = await getOrganizationBySlug(session.user.org_slug);
 		if (!org) throw new Error("Organization not found");
 
-		const updated = await updateOrganization(org.id, data);
+		// SSO Validation
+		if (data.ssoProvider && data.ssoProvider !== "none" && data.ssoMetadata) {
+			try {
+				const response = await axios.get(data.ssoMetadata, { timeout: 5000 });
+				const contentType = response.headers["content-type"];
+				const body = typeof response.data === "string" ? response.data : JSON.stringify(response.data);
+
+				const isXml = body.includes("<?xml") || body.includes("<EntityDescriptor");
+				const isJson = contentType?.includes("application/json") || (body.startsWith("{") && body.includes("issuer"));
+
+				if (!isXml && !isJson) {
+					throw new Error("Invalid metadata format. Expected SAML XML or OIDC JSON.");
+				}
+				
+				data.ssoConfigured = true;
+			} catch (error: any) {
+				throw new Error(`SSO Metadata Verification Failed: ${error.message}. Ensure the URL is public and returns valid metadata.`);
+			}
+		} else if (data.ssoProvider === "none") {
+			data.ssoConfigured = false;
+			data.ssoMetadata = "";
+		}
+
+		const updated = await updateOrganization(org.id, data as any);
+
+		// Audit Logging
+		await db.insert(auditLogs).values({
+			org_slug: session.user.org_slug,
+			actor_id: session.user.id,
+			action: "ORG_SETTINGS_UPDATED",
+			entity_type: "organization",
+			entity_id: org.id.toString(),
+			metadata: data,
+		});
+
 		revalidatePath("/dashboard/settings");
 		return { success: true, org: updated };
+	});
+}
+
+/**
+ * Org Admin: Send a test invite to verify email deliverability (System Test Requirement)
+ */
+export async function actionSendTestInvite(email: string) {
+	return await tc(async () => {
+		const session = await getSession();
+		if (!session || !session.user.org_slug) {
+			throw new ForbiddenError("Unauthorized");
+		}
+
+		const token = Math.random().toString(36).substring(2, 15);
+		const expiry = new Date();
+		expiry.setHours(expiry.getHours() + 24);
+
+		await db.insert(invites).values({
+			email,
+			org_slug: session.user.org_slug,
+			invited_by: session.user.id,
+			token,
+			expires_at: expiry,
+			role: "member",
+		});
+
+		await db.insert(auditLogs).values({
+			org_slug: session.user.org_slug,
+			actor_id: session.user.id,
+			action: "SYSTEM_TEST_INVITE",
+			entity_type: "user",
+			entity_id: email,
+			metadata: { testEmail: email },
+		});
+
+		return { success: true, message: `Test invite sent to ${email}` };
 	});
 }
 

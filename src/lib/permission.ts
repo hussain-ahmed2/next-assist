@@ -15,6 +15,10 @@ export const org_admin = ac.newRole({
 	...adminAc.statements,
 });
 
+export const program_manager = ac.newRole({
+	...adminAc.statements,
+});
+
 export const expert = ac.newRole({
 	...userAc.statements,
 });

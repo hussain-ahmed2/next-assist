@@ -1,5 +1,7 @@
-import { index, pgTable, serial, varchar, boolean } from "drizzle-orm/pg-core";
+import { index, pgTable, serial, varchar, boolean, text, timestamp, pgEnum } from "drizzle-orm/pg-core";
 import { soft_delete, timestamps } from "../columns";
+
+export const planEnum = pgEnum("plan_enum", ["Free", "Business", "Enterprise"]);
 import { relations } from "drizzle-orm";
 import { user } from "./auth";
 
@@ -10,9 +12,26 @@ export const organizations = pgTable(
 		id: serial("id").primaryKey(),
 		name: varchar("name").notNull(),
 		slug: varchar("slug").unique().notNull(),
-		plan: varchar("plan").default("Free").notNull(),
+		plan: planEnum("plan").default("Free").notNull(),
 		type: varchar("type").default("Company").notNull(), // College, University, School, Company
 		isRoot: boolean("is_root").default(false).notNull(),
+
+		// Trial Information
+		trialStartDate: timestamp("trial_start_date"),
+		trialEndDate: timestamp("trial_end_date"),
+
+		// Org Profile
+		legalName: varchar("legal_name"),
+		hqAddress: text("hq_address"),
+		taxId: varchar("tax_id"), // VAT/EIN
+
+		// Security/Access
+		allowedDomains: text("allowed_domains").array(), // Domain Whitelisting
+		isIomEnabled: boolean("is_iom_enabled").default(true).notNull(), // Invite-Only Mode
+		isPublished: boolean("is_published").default(false).notNull(),
+		ssoConfigured: boolean("sso_configured").default(false).notNull(),
+		ssoProvider: varchar("sso_provider", { length: 50 }), // okta, azure, google
+		ssoMetadata: text("sso_metadata"), // XML or JSON config string
 
 		...timestamps,
 		...soft_delete,

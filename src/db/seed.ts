@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { db, withOrganization } from "@/db";
 import { provisionTenantSchema } from "@/db/provision";
-import { organizations, user, session, account, verification, site_config, courses, lessons, courseEnrollment, courseProgress } from "./schema";
+import { organizations, user, session, account, verification, site_config, courses, lessons, courseEnrollment, courseProgress, auditLogs, invites } from "./schema";
 import { auth } from "@/lib/auth";
 import { eq } from "drizzle-orm";
 
@@ -13,6 +13,8 @@ async function seed() {
 		{ name: "Enrollments", obj: courseEnrollment },
 		{ name: "Lessons", obj: lessons },
 		{ name: "Courses", obj: courses },
+		{ name: "Invites", obj: invites },
+		{ name: "Audit Logs", obj: auditLogs },
 		{ name: "Sessions", obj: session },
 		{ name: "Accounts", obj: account },
 		{ name: "Verifications", obj: verification },
@@ -62,10 +64,10 @@ async function seed() {
 
 	// 3. Subsidiary Organizations
 	const orgConfigs = [
-		{ name: "Acme Corp", slug: "acme-inc", plan: "Enterprise", type: "Company" },
-		{ name: "Globex Corporation", slug: "globex", plan: "Pro", type: "Company" },
-		{ name: "Initech", slug: "initech", plan: "Free", type: "Company" },
-		{ name: "Sprung Valley University", slug: "svu", plan: "University", type: "University" },
+		{ name: "Acme Corp", slug: "acme-inc", plan: "Enterprise" as const, type: "Company" },
+		{ name: "Globex Corporation", slug: "globex", plan: "Business" as const, type: "Company" },
+		{ name: "Initech", slug: "initech", plan: "Free" as const, type: "Company" },
+		{ name: "Sprung Valley University", slug: "svu", plan: "Enterprise" as const, type: "University" },
 	];
 
 	for (const org of orgConfigs) {
@@ -74,6 +76,15 @@ async function seed() {
 		// Create the Postgres schema and run tenant migrations inside it.
 		// This gives each org its own isolated courses, lessons, etc. tables.
 		await provisionTenantSchema(org.slug);
+		
+		await db.insert(auditLogs).values({
+			org_slug: org.slug,
+			actor_id: "system-seed",
+			action: "ORG_PROVISIONED",
+			entity_type: "organization",
+			entity_id: org.slug,
+			metadata: { plan: org.plan, source: "seed" },
+		});
 	}
 
 	// 4. Create specialized users

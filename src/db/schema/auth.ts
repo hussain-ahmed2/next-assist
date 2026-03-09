@@ -2,7 +2,7 @@ import { pgTable, text, timestamp, boolean, varchar, pgEnum } from "drizzle-orm/
 import { organizations } from "./organizations";
 import { soft_delete, timestamps } from "../columns";
 
-export const roles = pgEnum("roles", ["user", "member", "expert", "org_admin", "super_admin"]);
+export const roles = pgEnum("roles", ["user", "member", "expert", "program_manager", "org_admin", "super_admin"]);
 
 export const user = pgTable("user", {
 	id: text("id").primaryKey(),
@@ -15,7 +15,9 @@ export const user = pgTable("user", {
 	banExpires: timestamp("ban_expires"),
 	
 	// Custom fields
+	phone: text("phone"),
 	role: roles("role").default("user").notNull(),
+	isBillingAdmin: boolean("is_billing_admin").default(false).notNull(),
 	org_slug: varchar("org_slug").references(() => organizations.slug),
 
 	createdAt: timestamps.createdAt,
