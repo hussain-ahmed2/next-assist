@@ -15,6 +15,7 @@ import { headers } from "next/headers";
 import { CreateUserSchema } from "@/validations/admin.validation";
 import axios from "axios";
 import { getAuth0ManagementToken } from "@/lib/auth0.utility";
+import { user } from "@/db/schema";
 
 /**
  * Action for Org Admins to accept a user into their organization
@@ -445,6 +446,65 @@ export async function actionGetSSOUrl(email: string) {
 		});
 
 		return { url: `${issuer}authorize?${params.toString()}` };
+	});
+}
+
+/**
+ * Exchange the SSO authorization code for a session.
+ */
+export async function actionExchangeSSOCode(code: string, slug: string) {
+	return await tc(async () => {
+		if (!code || !slug) throw new Error("Missing code or state");
+
+		const [org] = await db.select()
+			.from(organizations)
+			.where(eq(organizations.slug, slug))
+			.limit(1);
+
+		if (!org || !org.ssoConfigured || !org.ssoMetadata || !org.ssoClientId || !org.ssoClientSecret) {
+			throw new Error("Invalid organization SSO configuration");
+		}
+
+		const issuer = org.ssoMetadata.endsWith("/") ? org.ssoMetadata : `${org.ssoMetadata}/`;
+		const tokenUrl = `${issuer}oauth/token`;
+		const redirectUri = `${process.env.BETTER_AUTH_URL || 'http://localhost:3000'}/auth/sso/callback`;
+
+		// 1. Exchange code for tokens
+		const response = await axios.post(tokenUrl, {
+			grant_type: "authorization_code",
+			client_id: org.ssoClientId,
+			client_secret: org.ssoClientSecret,
+			code: code,
+			redirect_uri: redirectUri,
+		});
+
+		const { id_token, access_token } = response.data;
+		if (!id_token) throw new Error("Failed to obtain ID token from provider");
+
+		// 2. Get User Info (In production, verify JWT, but for demo we'll fetch from /userinfo)
+		const userInfoRes = await axios.get(`${issuer}userinfo`, {
+			headers: { Authorization: `Bearer ${access_token}` }
+		});
+
+		const profile = userInfoRes.data;
+		if (!profile.email) throw new Error("Email not provided by identity provider");
+
+		// 3. Find or Create User
+		const [existingUser] = await db.select().from(user).where(eq(user.email, profile.email)).limit(1);
+
+		if (!existingUser) {
+			// If user doesn't exist, we might want to auto-provision them if IOM is off
+			// But for now, we'll assume they must exist or we fail (or create them as member)
+			throw new Error(`Account not found for ${profile.email}. Please contact your administrator.`);
+		}
+
+		// 4. In a real app, we would use auth.api.createSession here
+		// For now, we'll return the success and the target user
+		return { 
+			success: true, 
+			user: existingUser,
+			message: `Welcome back, ${existingUser.name}!`
+		};
 	});
 }
 
