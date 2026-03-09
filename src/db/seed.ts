@@ -64,7 +64,18 @@ async function seed() {
 
 	// 3. Subsidiary Organizations
 	const orgConfigs = [
-		{ name: "Acme Corp", slug: "acme-inc", plan: "Enterprise" as const, type: "Company" },
+		{ 
+			name: "Acme Corp", 
+			slug: "acme-inc", 
+			plan: "Enterprise" as const, 
+			type: "Company",
+			allowedDomains: ["acme.com"],
+			ssoConfigured: true,
+			ssoProvider: "Auth0",
+			ssoMetadata: "https://dev-ubje3hdvoz0ghvao.us.auth0.com/",
+			ssoClientId: "p4suD4LsaXSFA6IoUlLfCEkuPv9UnnJQ",
+			ssoClientSecret: "IgnBXl49YA-Vdb174HGvh5adUR2cSyWSpHJo4OqiAr2wy1zs-VK4pwVCvosuaTAr",
+		},
 		{ name: "Globex Corporation", slug: "globex", plan: "Business" as const, type: "Company" },
 		{ name: "Initech", slug: "initech", plan: "Free" as const, type: "Company" },
 		{ name: "Sprung Valley University", slug: "svu", plan: "Enterprise" as const, type: "University" },
@@ -90,10 +101,10 @@ async function seed() {
 	// 4. Create specialized users
 	const usersToCreate = [
 		// Acme Inc
-		{ email: "admin@acmeinc.com", password: "Password@123", name: "Acme Admin", role: "org_admin", org_slug: "acme-inc" },
-		{ email: "specialist@acmeinc.com", password: "Password@123", name: "Acme Specialist", role: "expert", org_slug: "acme-inc" },
-		{ email: "user1@acmeinc.com", password: "Password@123", name: "Acme User 1", role: "member", org_slug: "acme-inc" },
-		{ email: "user3@acmeinc.com", password: "Password@123", name: "Acme User 3", role: "member", org_slug: "acme-inc" },
+		{ email: "admin@acme.com", password: "Password@123", name: "Acme Admin", role: "org_admin", org_slug: "acme-inc" },
+		{ email: "specialist@acme.com", password: "Password@123", name: "Acme Specialist", role: "expert", org_slug: "acme-inc" },
+		{ email: "user1@acme.com", password: "Password@123", name: "Acme User 1", role: "member", org_slug: "acme-inc" },
+		{ email: "user3@acme.com", password: "Password@123", name: "Acme User 3", role: "member", org_slug: "acme-inc" },
 		
 		// Globex
 		{ email: "hank.scorpio@globex.com", password: "Password@123", name: "Hank Scorpio", role: "org_admin", org_slug: "globex" },
@@ -140,7 +151,7 @@ async function seed() {
 
 	// Acme Data
 	await withOrganization("acme-inc", async (tx) => {
-		const [specialist] = await tx.select().from(user).where(eq(user.email, "specialist@acmeinc.com")).limit(1);
+		const [specialist] = await tx.select().from(user).where(eq(user.email, "specialist@acme.com")).limit(1);
 		if (specialist) {
 			const [course] = await tx.insert(courses).values({
 				title: "Advanced React Patterns",
@@ -154,7 +165,7 @@ async function seed() {
 				{ courseId: course.id, title: "Render Props vs Hooks", order: 2, content: "Understanding the evolution of state sharing." },
 			]);
 
-			const [m1] = await tx.select().from(user).where(eq(user.email, "user1@acmeinc.com")).limit(1);
+			const [m1] = await tx.select().from(user).where(eq(user.email, "user1@acme.com")).limit(1);
 			if (m1) {
 				await tx.insert(courseEnrollment).values({ courseId: course.id, memberId: m1.id });
 				await tx.insert(courseProgress).values({ courseId: course.id, memberId: m1.id, lessonsCompleted: 1 });

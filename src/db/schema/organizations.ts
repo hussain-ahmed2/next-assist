@@ -30,8 +30,10 @@ export const organizations = pgTable(
 		isIomEnabled: boolean("is_iom_enabled").default(true).notNull(), // Invite-Only Mode
 		isPublished: boolean("is_published").default(false).notNull(),
 		ssoConfigured: boolean("sso_configured").default(false).notNull(),
-		ssoProvider: varchar("sso_provider", { length: 50 }), // okta, azure, google
-		ssoMetadata: text("sso_metadata"), // XML or JSON config string
+		ssoProvider: varchar("sso_provider", { length: 50 }), // okta, azure, google, auth0
+		ssoMetadata: text("sso_metadata"), // XML or JSON config string or Issuer URL
+		ssoClientId: text("sso_client_id"),
+		ssoClientSecret: text("sso_client_secret"),
 
 		...timestamps,
 		...soft_delete,

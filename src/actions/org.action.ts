@@ -1,9 +1,11 @@
 'use server';
 
+import { organizations } from "@/db/schema/organizations";
 import { getOrgMembers, updateMemberStatus, getAllUsers } from "@/db/query/user.query";
 import { getAllOrganizations, createOrganizationWithSchema } from "@/db/query/organization.query";
 import { db } from "@/db";
 import { invites, auditLogs } from "@/db/schema/logs";
+import { sql } from "drizzle-orm";
 import { getSession } from "@/lib/session";
 import { revalidatePath } from "next/cache";
 import { tc } from "@/lib/async";
@@ -238,60 +240,91 @@ export async function actionUpdateOrgSettings(data: {
 	type?: string;
 	ssoProvider?: string;
 	ssoMetadata?: string;
+	ssoClientId?: string;
+	ssoClientSecret?: string;
 	ssoConfigured?: boolean;
 	isIomEnabled?: boolean;
 }) {
+	const session = await getSession();
+	if (!session || !session.user.org_slug) return { success: false, message: "Unauthorized" };
+	
+	const slug = session.user.org_slug as string;
+	const actorId = session.user.id as string;
+
 	return await tc(async () => {
-		const session = await getSession();
-		if (!session || !session.user.org_slug) {
-			throw new ForbiddenError("You must be part of an organization");
-		}
-		
 		if (session.user.role !== "org_admin" && session.user.role !== "super_admin") {
 			throw new ForbiddenError("Only Organization Admins can update settings");
 		}
 
-		const { updateOrganization, getOrganizationBySlug } = await import("@/db/query/organization.query");
-		const org = await getOrganizationBySlug(session.user.org_slug);
-		if (!org) throw new Error("Organization not found");
-
+		const { organizations } = await import("@/db/schema");
+		const { db } = await import("@/db");
+		const { eq } = await import("drizzle-orm");
+		
 		// SSO Validation
 		if (data.ssoProvider && data.ssoProvider !== "none" && data.ssoMetadata) {
 			try {
-				const response = await axios.get(data.ssoMetadata, { timeout: 5000 });
+				let metadataUrl = data.ssoMetadata;
+				
+				// Auto-append OIDC discovery path if it looks like a base issuer URL
+				if (data.ssoProvider !== "saml" && !metadataUrl.includes(".well-known")) {
+					const baseUrl = metadataUrl.endsWith("/") ? metadataUrl : `${metadataUrl}/`;
+					metadataUrl = `${baseUrl}.well-known/openid-configuration`;
+				}
+
+				const response = await axios.get(metadataUrl, { timeout: 8000 });
 				const contentType = response.headers["content-type"];
 				const body = typeof response.data === "string" ? response.data : JSON.stringify(response.data);
 
 				const isXml = body.includes("<?xml") || body.includes("<EntityDescriptor");
-				const isJson = contentType?.includes("application/json") || (body.startsWith("{") && body.includes("issuer"));
+				const isJson = contentType?.includes("application/json") || (body.startsWith("{") && (body.includes("issuer") || body.includes("authorization_endpoint")));
 
 				if (!isXml && !isJson) {
-					throw new Error("Invalid metadata format. Expected SAML XML or OIDC JSON.");
+					throw new Error("Invalid metadata format. Expected SAML XML or OIDC JSON configuration.");
 				}
 				
 				data.ssoConfigured = true;
+				// If we successfully found the OIDC config at the discovery URL, save that URL
+				data.ssoMetadata = data.ssoProvider !== "none" ? metadataUrl : data.ssoMetadata;
 			} catch (error: any) {
-				throw new Error(`SSO Metadata Verification Failed: ${error.message}. Ensure the URL is public and returns valid metadata.`);
+				const msg = error.response ? `Server responded with ${error.response.status}` : error.message;
+				throw new Error(`SSO Verification Failed: ${msg}. Check your Metadata URL.`);
 			}
 		} else if (data.ssoProvider === "none") {
 			data.ssoConfigured = false;
 			data.ssoMetadata = "";
 		}
 
-		const updated = await updateOrganization(org.id, data as any);
+		const [updatedOrg] = await db.update(organizations)
+			.set({
+				name: data.name,
+				type: data.type,
+				ssoProvider: data.ssoProvider,
+				ssoMetadata: data.ssoMetadata,
+				ssoClientId: data.ssoClientId,
+				ssoClientSecret: data.ssoClientSecret,
+				ssoConfigured: data.ssoConfigured,
+				isIomEnabled: data.isIomEnabled,
+			})
+			.where(eq(organizations.slug, slug))
+			.returning();
+
+		if (!updatedOrg) throw new Error("Organization not found or update failed");
 
 		// Audit Logging
 		await db.insert(auditLogs).values({
-			org_slug: session.user.org_slug,
-			actor_id: session.user.id,
+			org_slug: slug,
+			actor_id: actorId,
 			action: "ORG_SETTINGS_UPDATED",
 			entity_type: "organization",
-			entity_id: org.id.toString(),
-			metadata: data,
-		});
+			entity_id: updatedOrg.slug,
+			metadata: { 
+				...data, 
+				ssoClientSecret: data.ssoClientSecret ? "[REDACTED]" : undefined 
+			},
+		} as any);
 
 		revalidatePath("/dashboard/settings");
-		return { success: true, org: updated };
+		return { success: true, org: updatedOrg };
 	});
 }
 
@@ -328,6 +361,83 @@ export async function actionSendTestInvite(email: string) {
 		});
 
 		return { success: true, message: `Test invite sent to ${email}` };
+	});
+}
+
+/**
+ * Public: Check if an email domain belongs to an organization with SSO enabled.
+ * Used for the dynamic login flow.
+ */
+export async function actionCheckSSO(email: string) {
+	return await tc(async () => {
+		if (!email || !email.includes("@")) return null;
+		
+		const domain = email.split("@")[1];
+		if (!domain) return null;
+
+		// Skip common personal domains
+		console.log(`🔍 Checking SSO for domain: ${domain}`);
+
+		const [org] = await db.select()
+			.from(organizations)
+			.where(sql`${domain} = ANY(${organizations.allowedDomains})`)
+			.limit(1);
+
+		if (org) {
+			console.log(`✅ Found Org: ${org.name} (SSO Configured: ${org.ssoConfigured})`);
+		} else {
+			console.log(`❌ No organziation found for domain: ${domain}`);
+		}
+
+		if (org && org.ssoConfigured) {
+			return {
+				orgName: org.name,
+				ssoProvider: org.ssoProvider || 'none',
+				ssoConfigured: true,
+				slug: org.slug,
+			};
+		}
+
+		return null;
+	});
+}
+
+/**
+ * Get the OIDC/SAML authorization URL for the organization.
+ */
+export async function actionGetSSOUrl(email: string) {
+	return await tc(async () => {
+		if (!email || !email.includes("@")) throw new Error("Invalid email");
+		
+		const domain = email.split("@")[1];
+		const [org] = await db.select()
+			.from(organizations)
+			.where(sql`${organizations.allowedDomains} @> array[${domain}]::text[]`)
+			.limit(1);
+
+		if (!org || !org.ssoConfigured || !org.ssoMetadata) {
+			throw new Error("SSO is not enabled for this domain.");
+		}
+
+		// Auth0/OIDC standard params
+		const issuer = org.ssoMetadata.endsWith("/") ? org.ssoMetadata : `${org.ssoMetadata}/`;
+		const clientId = org.ssoClientId;
+		
+		if (!clientId) {
+			throw new Error("Client ID is missing. Please configure it in Settings.");
+		}
+
+		const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/auth/sso/callback`;
+		
+		const params = new URLSearchParams({
+			client_id: clientId,
+			response_type: "code",
+			scope: "openid profile email",
+			redirect_uri: redirectUri,
+			state: org.slug, // Pass slug to know where to redirect after callback
+		});
+
+		return { url: `${issuer}authorize?${params.toString()}` };
 	});
 }
 

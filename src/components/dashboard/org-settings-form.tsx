@@ -24,6 +24,8 @@ export function OrgSettingsForm({ organization }: { organization: any }) {
     const [isIomEnabled, setIsIomEnabled] = useState(organization.isIomEnabled ?? true);
     const [ssoProvider, setSsoProvider] = useState(organization.ssoProvider || "none");
     const [ssoMetadata, setSsoMetadata] = useState(organization.ssoMetadata || "");
+    const [ssoClientId, setSsoClientId] = useState(organization.ssoClientId || "");
+    const [ssoClientSecret, setSsoClientSecret] = useState(organization.ssoClientSecret || "");
     const [ssoConfigured, setSsoConfigured] = useState(organization.ssoConfigured || false);
 
     const handleSave = async (e: React.FormEvent) => {
@@ -36,7 +38,9 @@ export function OrgSettingsForm({ organization }: { organization: any }) {
             isIomEnabled,
             ssoProvider,
             ssoMetadata,
-            ssoConfigured: ssoProvider !== "none" && ssoMetadata.trim() !== ""
+            ssoClientId,
+            ssoClientSecret,
+            ssoConfigured: ssoProvider !== "none" && ssoMetadata.trim() !== "" && ssoClientId.trim() !== ""
         })) as any;
 
         if (result.success) {
@@ -181,10 +185,10 @@ export function OrgSettingsForm({ organization }: { organization: any }) {
                                     </Select>
                                 </div>
                                 <div className="space-y-2">
-                                    <Label htmlFor="metadata">Metadata URL / XML</Label>
+                                    <Label htmlFor="metadata">Metadata URL / Issuer</Label>
                                     <Input 
                                         id="metadata"
-                                        placeholder="https://idp.example.com/metadata.xml"
+                                        placeholder="https://dev-xxx.auth0.com/"
                                         value={ssoMetadata}
                                         onChange={(e) => setSsoMetadata(e.target.value)}
                                         disabled={ssoProvider === "none"}
@@ -192,6 +196,32 @@ export function OrgSettingsForm({ organization }: { organization: any }) {
                                     />
                                 </div>
                             </div>
+
+                            {ssoProvider !== "none" && (
+                                <div className="grid gap-4 sm:grid-cols-2 animate-in fade-in slide-in-from-top-2">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="client-id">Client ID</Label>
+                                        <Input 
+                                            id="client-id"
+                                            placeholder="Your OIDC Client ID"
+                                            value={ssoClientId}
+                                            onChange={(e) => setSsoClientId(e.target.value)}
+                                            className="h-11 shadow-inner bg-muted/10 font-mono"
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="client-secret">Client Secret</Label>
+                                        <Input 
+                                            id="client-secret"
+                                            type="password"
+                                            placeholder="••••••••••••••••"
+                                            value={ssoClientSecret}
+                                            onChange={(e) => setSsoClientSecret(e.target.value)}
+                                            className="h-11 shadow-inner bg-muted/10"
+                                        />
+                                    </div>
+                                </div>
+                            )}
                             {ssoProvider !== "none" && !ssoConfigured && (
                                 <div className="p-3 text-xs bg-amber-500/10 border border-amber-500/20 text-amber-600 rounded-lg flex items-center gap-2">
                                     <Info className="size-4" />
