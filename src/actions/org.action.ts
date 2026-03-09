@@ -504,10 +504,7 @@ export async function actionExchangeSSOCode(code: string, slug: string) {
 			body: {
 				userId: existingUser.id,
 			},
-			headers: {
-				...(await headers()),
-				authorization: `Bearer ${process.env.BETTER_AUTH_SECRET}`,
-			},
+			headers: await headers(),
 		});
 
 		if (!loginResponse) {
