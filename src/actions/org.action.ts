@@ -11,7 +11,7 @@ import { revalidatePath } from "next/cache";
 import { tc } from "@/lib/async";
 import { ForbiddenError } from "@/lib/errors";
 import { auth } from "@/lib/auth";
-import { headers } from "next/headers";
+import { headers, cookies } from "next/headers";
 import { CreateUserSchema } from "@/validations/admin.validation";
 import axios from "axios";
 import { getAuth0ManagementToken } from "@/lib/auth0.utility";
@@ -498,8 +498,22 @@ export async function actionExchangeSSOCode(code: string, slug: string) {
 			throw new Error(`Account not found for ${profile.email}. Please contact your administrator.`);
 		}
 
-		// 4. In a real app, we would use auth.api.createSession here
-		// For now, we'll return the success and the target user
+		// 4. Use Better Auth's Official Admin API to provision a trusted session
+		// We use the BETTER_AUTH_SECRET to bypass the session requirement for this server-side call
+		const loginResponse = await auth.api.impersonateUser({
+			body: {
+				userId: existingUser.id,
+			},
+			headers: {
+				...(await headers()),
+				authorization: `Bearer ${process.env.BETTER_AUTH_SECRET}`,
+			},
+		});
+
+		if (!loginResponse) {
+			throw new Error("Better Auth was unable to create a session for the verified user.");
+		}
+
 		return { 
 			success: true, 
 			user: existingUser,
